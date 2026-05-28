@@ -342,7 +342,7 @@
         .dot-work { color: var(--success); font-size: 1.2rem;}
         .dot-waste { color: var(--danger); font-size: 1.2rem;}
         .dot-legit { color: var(--accent); font-size: 1.2rem;}
-        .dot-untracked { color: #777; font-size: 1.2rem; }
+ .dot-untracked { color: #777; font-size: 1.2rem; }
         .timeline-track-segment.untracked { background: #333; }
         .event-badge.untracked { background: rgba(119, 119, 119, 0.15); color: #aaa; }
 
@@ -403,7 +403,7 @@
             font-size: 0.65rem;
             text-transform: uppercase;
             font-weight: 700;
-            width: 70px;
+            width: 85px;
             text-align: center;
         }
         .event-badge.work { background: rgba(102, 187, 106, 0.15); color: var(--success); }
@@ -545,10 +545,19 @@
 </div>
 
 <script>
-    // State Tracking
+// State Tracking
     let workSeconds = 0;
     let wastedSeconds = 0;
     let legitSeconds = 0;
+
+    // Absolute time tracking to prevent background tab throttling
+    let workAccumulated = 0;
+    let wastedAccumulated = 0;
+    let legitAccumulated = 0;
+    
+    let workStartTime = 0;
+    let wastedStartTime = 0;
+    let legitStartTime = 0;
 
     let isWorkRunning = false;
     let isLegitPaused = false;
@@ -678,7 +687,7 @@
         document.getElementById('details-modal').style.display = 'flex';
     };
 
-    // Tracking Event Lifecycle (essential for timeline)
+    // Tracking Event Lifecycle
     function closeLastEvent() {
         if (currentSession && currentSession.events && currentSession.events.length > 0) {
             let lastEvent = currentSession.events[currentSession.events.length - 1];
@@ -686,7 +695,7 @@
         }
     }
 
-    // Timer Logic Hooks
+    // Timer Logic Hooks (Throttling-Proof)
     function startWork() {
         if (isWorkRunning) return;
         closeLastEvent();
@@ -697,13 +706,15 @@
         playPauseBtn.textContent = 'Pause';
         legitPauseBtn.disabled = false;
         
-        clearInterval(wastedInterval);
-        clearInterval(legitInterval);
+        // Stop and accumulate other timers
+        if (wastedInterval) { clearInterval(wastedInterval); wastedInterval = null; wastedAccumulated = wastedSeconds; }
+        if (legitInterval) { clearInterval(legitInterval); legitInterval = null; legitAccumulated = legitSeconds; }
         
         currentSession.events.push({ type: 'work', start: Date.now() });
+        workStartTime = Date.now();
         
         workInterval = setInterval(() => {
-            workSeconds++;
+            workSeconds = workAccumulated + Math.floor((Date.now() - workStartTime) / 1000);
             updateDisplays();
         }, 1000);
         
@@ -717,16 +728,18 @@
         isWorkRunning = false;
         isLegitPaused = false;
         
-        clearInterval(workInterval);
-        clearInterval(legitInterval);
+        // Stop and accumulate work/legit
+        if (workInterval) { clearInterval(workInterval); workInterval = null; workAccumulated = workSeconds; }
+        if (legitInterval) { clearInterval(legitInterval); legitInterval = null; legitAccumulated = legitSeconds; }
         
         playPauseBtn.textContent = 'Resume';
         legitPauseBtn.disabled = false;
         
         currentSession.events.push({ type: 'waste', start: Date.now() });
+        wastedStartTime = Date.now();
         
         wastedInterval = setInterval(() => {
-            wastedSeconds++;
+            wastedSeconds = wastedAccumulated + Math.floor((Date.now() - wastedStartTime) / 1000);
             updateDisplays();
         }, 1000);
         
@@ -735,7 +748,7 @@
 
     function togglePlayPause() {
         if (isWorkRunning) pauseWork(); 
-        else startWork(); // resumes from both waste and legit pauses
+        else startWork(); 
     }
 
     function startLegitPause(title) {
@@ -744,16 +757,18 @@
         isWorkRunning = false;
         isLegitPaused = true;
         
-        clearInterval(workInterval);
-        clearInterval(wastedInterval);
+        // Stop and accumulate work/wasted
+        if (workInterval) { clearInterval(workInterval); workInterval = null; workAccumulated = workSeconds; }
+        if (wastedInterval) { clearInterval(wastedInterval); wastedInterval = null; wastedAccumulated = wastedSeconds; }
         
         playPauseBtn.textContent = 'Resume'; 
         legitPauseBtn.disabled = true; 
         
         currentSession.events.push({ type: 'legit', start: Date.now(), title: title });
+        legitStartTime = Date.now();
         
         legitInterval = setInterval(() => {
-            legitSeconds++;
+            legitSeconds = legitAccumulated + Math.floor((Date.now() - legitStartTime) / 1000);
             updateDisplays();
         }, 1000);
         
@@ -763,9 +778,10 @@
 
     function stopSession() {
         closeLastEvent();
-        clearInterval(workInterval);
-        clearInterval(wastedInterval);
-        clearInterval(legitInterval);
+        
+        if (workInterval) { clearInterval(workInterval); workInterval = null; workAccumulated = workSeconds; }
+        if (wastedInterval) { clearInterval(wastedInterval); wastedInterval = null; wastedAccumulated = wastedSeconds; }
+        if (legitInterval) { clearInterval(legitInterval); legitInterval = null; legitAccumulated = legitSeconds; }
         
         isWorkRunning = false;
         isLegitPaused = false;
@@ -782,20 +798,20 @@
     }
 
     function resetAll() {
-        clearInterval(workInterval);
-        clearInterval(wastedInterval);
-        clearInterval(legitInterval);
+        if (workInterval) { clearInterval(workInterval); workInterval = null; }
+        if (wastedInterval) { clearInterval(wastedInterval); wastedInterval = null; }
+        if (legitInterval) { clearInterval(legitInterval); legitInterval = null; }
         
         workSeconds = 0;
         wastedSeconds = 0;
         legitSeconds = 0;
         
+        workAccumulated = 0;
+        wastedAccumulated = 0;
+        legitAccumulated = 0;
+        
         isWorkRunning = false;
         isLegitPaused = false;
-        
-        workInterval = null;
-        wastedInterval = null;
-        legitInterval = null;
         currentSession = null;
         
         updateDisplays();
