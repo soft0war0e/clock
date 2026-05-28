@@ -448,7 +448,7 @@
                 <button class="pill-btn" style="background: var(--danger); color: #fff;" id="reset-journal-btn">Reset Journal</button>
             </div>
             <table>
-                <thead>
+    <thead>
                     <tr>
                         <th>Title</th>
                         <th>Date</th>
@@ -458,6 +458,7 @@
                         <th>Expected</th>
                         <th>Status</th>
                         <th>Details</th>
+                        <th>Delete</th>
                     </tr>
                 </thead>
                 <tbody id="journal-body"></tbody>
@@ -640,7 +641,7 @@
         localStorage.setItem('focusTimerJournal', JSON.stringify(journal));
     }
 
-    function renderJournal() {
+ function renderJournal() {
         const journal = getJournal();
         journalBody.innerHTML = '';
         journal.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
@@ -657,6 +658,7 @@
                 <td>${escapeHtml(entry.expectedTime)}</td>
                 <td><span class="status-badge ${statusClass}">${entry.status}</span></td>
                 <td><button class="pill-btn" style="padding: 0.3rem 0.6rem; min-width: auto; font-size: 0.75rem; border-radius: 6px;" onclick="showDetails('${entry.startTime}')">Details</button></td>
+                <td><button class="pill-btn" style="padding: 0.3rem 0.6rem; min-width: auto; font-size: 0.9rem; border-radius: 6px; background: var(--muted-red); color: #fff;" onclick="deleteSession('${entry.startTime}')" title="Delete Session">🗑️</button></td>
             `;
             journalBody.appendChild(tr);
         });
@@ -686,6 +688,17 @@
         
         document.getElementById('details-content').innerHTML = html;
         document.getElementById('details-modal').style.display = 'flex';
+    };
+
+    window.deleteSession = function(startTime) {
+        if (!confirm('Are you sure you want to permanently delete this session?')) return;
+        
+        let journal = getJournal();
+        // Filter out the session with the matching startTime
+        journal = journal.filter(entry => entry.startTime !== startTime);
+        
+        saveJournal(journal);
+        renderJournal();
     };
 
 // Persistence Logic
