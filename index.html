@@ -283,12 +283,12 @@
             flex-wrap: wrap;
         }
 
-        /* Timeline Section */
+       /* Timeline Section */
         #timeline-screen {
             display: none;
             flex-direction: column;
             width: 100%;
-            gap: 1rem;
+            gap: 0.5rem;
             animation: fadeIn 0.3s;
         }
 
@@ -297,7 +297,6 @@
             gap: 0.5rem;
             justify-content: center;
             flex-wrap: wrap;
-            margin-bottom: 1rem;
         }
 
         .timeline-filter {
@@ -309,18 +308,107 @@
             border-radius: 8px;
         }
 
-        .timeline-filter.active {
-            background: var(--accent);
-            color: #1a1a1a;
-        }
+        .timeline-filter.active { background: var(--accent); color: #1a1a1a; }
 
-        #timeline-grid-overlay {
-            background-image: linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px);
-            background-size: 100% 60px; /* 60px = 15 mins */
+        /* Custom Scrollbar */
+        #timeline-scroll-area {
+            scrollbar-width: thin;
+            scrollbar-color: #555 transparent;
+        }
+        #timeline-scroll-area::-webkit-scrollbar { width: 8px; }
+        #timeline-scroll-area::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+
+        /* Daily Card UI */
+        .timeline-day-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .timeline-day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #333;
+            padding-bottom: 0.75rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .timeline-date { font-size: 1.1rem; font-weight: 600; color: var(--fg); }
+        .timeline-totals { font-size: 0.85rem; display: flex; gap: 1rem; flex-wrap: wrap; }
+        .timeline-totals span { display: flex; align-items: center; gap: 0.4rem; color: #ccc; }
+        .dot-work { color: var(--success); font-size: 1.2rem;}
+        .dot-waste { color: var(--danger); font-size: 1.2rem;}
+        .dot-legit { color: var(--accent); font-size: 1.2rem;}
+
+        /* Visual 24h Track */
+        .timeline-track-container {
+            position: relative;
+            width: 100%;
+            height: 24px;
+            background: #0a0a0a;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            border: 1px solid #333;
+        }
+        .timeline-track-segment {
+            position: absolute;
+            height: 100%;
+            top: 0;
+            opacity: 0.85;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        .timeline-track-segment:hover {
+            opacity: 1;
             z-index: 10;
+            transform: scaleY(1.2);
+            cursor: pointer;
         }
+        .timeline-track-segment.work { background: var(--success); }
+        .timeline-track-segment.waste { background: var(--danger); }
+        .timeline-track-segment.legit { background: var(--accent); }
 
-        .hidden { display: none !important; }
+        .track-markers {
+            position: relative;
+            width: 100%;
+            height: 15px;
+            margin-bottom: 2rem;
+            color: #666;
+            font-size: 0.7rem;
+            font-family: monospace;
+        }
+        .track-marker { position: absolute; transform: translateX(-50%); }
+
+        /* Feed List */
+        .timeline-feed { display: flex; flex-direction: column; gap: 0.4rem; }
+        .timeline-event-row {
+            display: flex;
+            align-items: center;
+            background: #242424;
+            padding: 0.6rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .event-time { width: 105px; color: #888; font-family: monospace; }
+        .event-badge {
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            width: 70px;
+            text-align: center;
+        }
+        .event-badge.work { background: rgba(102, 187, 106, 0.15); color: var(--success); }
+        .event-badge.waste { background: rgba(229, 115, 115, 0.15); color: var(--danger); }
+        .event-badge.legit { background: rgba(255, 183, 77, 0.15); color: var(--accent); }
+        .event-title { flex-grow: 1; color: var(--fg); min-width: 100px; }
+        .event-duration { font-family: monospace; color: #aaa; text-align: right; }
+      
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -413,6 +501,11 @@
             <button class="pill-btn timeline-filter" data-range="all">All</button>
             <button class="pill-btn" id="timeline-back-btn" style="background: var(--muted-red); padding: 0.6rem 1.2rem; min-width: 0;">Back</button>
         </div>
+        
+        <div id="timeline-scroll-area" style="width: 100%; height: 70vh; overflow-y: auto; padding-right: 0.5rem; margin-top: 1rem;">
+            <!-- Day Cards Injected Here Dynamically -->
+        </div>
+    </div>
         
         <div style="text-align: center; font-size: 0.85rem; color: #888; margin-bottom: 0.5rem;">
             Top is <strong>Now</strong>. Scroll down to go back in time. (15-min grid lines)
@@ -872,134 +965,162 @@
         return parts.join(' ');
     }
 
-    function renderTimeline(filter = 'all') {
+function renderTimeline(filter = 'all') {
         setupScreen.style.display = 'none';
         timerScreen.style.display = 'none';
         document.getElementById('timeline-screen').style.display = 'flex';
         
-        // Highlight active filter button
         document.querySelectorAll('.timeline-filter').forEach(b => {
             b.classList.remove('active');
             if (b.getAttribute('data-range') === filter) b.classList.add('active');
         });
         
         const nowMs = Date.now();
-        let rangeMs = 0;
+        let rangeMs = Infinity; // For "all"
         if (filter === '24h') rangeMs = 24 * 3600 * 1000;
         else if (filter === 'week') rangeMs = 7 * 24 * 3600 * 1000;
         else if (filter === 'month') rangeMs = 30 * 24 * 3600 * 1000;
         else if (filter === 'year') rangeMs = 365 * 24 * 3600 * 1000;
         
-        // Collate Events
+        // Extract all events
         let allEvents = [];
         const journal = getJournal();
         
         journal.forEach(entry => {
-            let evs = entry.events;
-            // Generate legacy approximation if missing events
-            if (!evs || evs.length === 0) {
-                evs = [];
+            let evs = entry.events || [];
+            
+            // Legacy/fallback generation
+            if (evs.length === 0) {
                 let st = new Date(entry.startTime).getTime();
-                if (entry.workSeconds > 0) {
-                    evs.push({ type: 'work', start: st, end: st + entry.workSeconds * 1000 });
-                    st += entry.workSeconds * 1000;
-                }
-                if (entry.legitSeconds > 0) {
-                    evs.push({ type: 'legit', title: 'Legacy Pause', start: st, end: st + entry.legitSeconds * 1000 });
-                    st += entry.legitSeconds * 1000;
-                }
-                if (entry.wastedSeconds > 0) {
-                    evs.push({ type: 'waste', start: st, end: st + entry.wastedSeconds * 1000 });
-                }
+                if (entry.workSeconds > 0) { evs.push({ type: 'work', start: st, end: st + entry.workSeconds * 1000 }); st += entry.workSeconds * 1000; }
+                if (entry.legitSeconds > 0) { evs.push({ type: 'legit', title: 'Legacy Pause', start: st, end: st + entry.legitSeconds * 1000 }); st += entry.legitSeconds * 1000; }
+                if (entry.wastedSeconds > 0) { evs.push({ type: 'waste', start: st, end: st + entry.wastedSeconds * 1000 }); }
             }
-            evs.forEach(e => { if (e.start && e.end) allEvents.push(e); });
+
+            evs.forEach(e => { 
+                if (e.start && e.end) {
+                    // Inject contextual title for generic blocks
+                    if (!e.title) e.title = (e.type === 'work' ? entry.title : (e.type === 'waste' ? 'Distraction / Waste' : 'Pause'));
+                    allEvents.push(e); 
+                }
+            });
         });
         
+        // Filter by Date Range
+        if (rangeMs !== Infinity) {
+            const cutoff = nowMs - rangeMs;
+            allEvents = allEvents.filter(e => e.end > cutoff);
+            allEvents.forEach(e => { if (e.start < cutoff) e.start = cutoff; }); // Clamp visuals to range
+        }
+        
+        // Sort Chronologically
         allEvents.sort((a,b) => a.start - b.start);
         
-        // Infer Gaps
-        let finalEvents = [];
-        let currentTime = null;
-        allEvents.forEach(e => {
-            if (currentTime !== null && e.start > currentTime) {
-                finalEvents.push({ type: 'gap', start: currentTime, end: e.start });
+        // Group by Day (Local Time)
+        const groupedByDay = {};
+        allEvents.forEach(ev => {
+            const d = new Date(ev.start);
+            // Unique key for the date YYYY-MM-DD
+            const dayKey = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            // Pretty string for header
+            const dayLabel = d.toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+            
+            if (!groupedByDay[dayKey]) {
+                groupedByDay[dayKey] = { dateObj: d, label: dayLabel, events: [], tWork: 0, tWaste: 0, tLegit: 0 };
             }
-            finalEvents.push(e);
-            currentTime = Math.max(currentTime || 0, e.end);
+            
+            groupedByDay[dayKey].events.push(ev);
+            
+            const dur = ev.end - ev.start;
+            if (ev.type === 'work') groupedByDay[dayKey].tWork += dur;
+            if (ev.type === 'waste') groupedByDay[dayKey].tWaste += dur;
+            if (ev.type === 'legit') groupedByDay[dayKey].tLegit += dur;
         });
-        if (currentTime !== null && currentTime < nowMs) {
-            finalEvents.push({ type: 'gap', start: currentTime, end: nowMs });
-        }
         
-        // Filter Constraints
-        if (filter !== 'all') {
-            let cutoff = nowMs - rangeMs;
-            finalEvents = finalEvents.filter(e => e.end > cutoff);
-            finalEvents.forEach(e => { if (e.start < cutoff) e.start = cutoff; });
-        } else {
-            if (finalEvents.length > 0) {
-                rangeMs = nowMs - finalEvents[0].start + (3600 * 1000); // 1h bottom padding
-            } else {
-                rangeMs = 24 * 3600 * 1000; // default empty state
-            }
-        }
-        
-        // DOM Generation
-        let container = document.getElementById('timeline-container');
-        let overlay = document.getElementById('timeline-grid-overlay');
+        // Build the DOM
+        const container = document.getElementById('timeline-scroll-area');
         container.innerHTML = '';
         
-        const msPerPx = 15000; // Scaled to exactly 240px per Hour (60px per 15min)
-        const containerHeightPx = (rangeMs / msPerPx) + 'px';
-        container.style.height = containerHeightPx;
-        overlay.style.height = containerHeightPx;
+        const typeLabels = { work: 'Work', waste: 'Wasted', legit: 'Pause' };
         
-        // Align background grid natively to the clock's current 15 min phase
-        let remainder = nowMs % 900000;
-        overlay.style.backgroundPosition = `0 ${(remainder / msPerPx)}px`;
+        // Sort Days from Newest to Oldest
+        const sortedDays = Object.keys(groupedByDay).sort((a,b) => b.localeCompare(a));
         
-        const typeLabels = { work: 'Work', waste: 'Wasted', legit: 'Pause', gap: 'App Not Used' };
+        if (sortedDays.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#888; padding: 3rem;">No data recorded for this time range.</div>';
+            return;
+        }
 
-        finalEvents.forEach(ev => {
-            let topPx = (nowMs - ev.end) / msPerPx;
-            let heightPx = Math.max(1, (ev.end - ev.start) / msPerPx); // min 1px visibility
+        sortedDays.forEach(dayKey => {
+            const day = groupedByDay[dayKey];
             
-            let block = document.createElement('div');
-            block.style.position = 'absolute';
-            block.style.top = topPx + 'px';
-            block.style.height = heightPx + 'px';
-            block.style.width = '100%';
-            block.style.borderBottom = '1px solid rgba(0,0,0,0.5)';
-            block.style.display = 'flex';
-            block.style.flexDirection = 'column';
-            block.style.alignItems = 'center';
-            block.style.justifyContent = 'center';
-            block.style.overflow = 'hidden';
-            block.style.boxSizing = 'border-box';
+            // Get Absolute boundaries of the Day to calculate 0% - 100% position on the visual track
+            const msInDay = 24 * 60 * 60 * 1000;
+            const startOfDay = new Date(day.dateObj);
+            startOfDay.setHours(0,0,0,0);
+            const startOfDayMs = startOfDay.getTime();
             
-            // Contextual Theming
-            block.style.backgroundColor = ev.type === 'gap' ? '#333' : (ev.type === 'legit' ? '#ffd54f' : (ev.type === 'work' ? '#66bb6a' : '#e57373'));
-            block.style.color = (ev.type === 'legit' || ev.type === 'gap') ? '#1a1a1a' : '#fff';
-            if (ev.type === 'gap') block.style.color = '#aaa';
+            let card = document.createElement('div');
+            card.className = 'timeline-day-card';
             
-            let durMs = ev.end - ev.start;
-            let timeRangeStr = formatTimeRange(ev.start, ev.end);
-            let durationStr = formatDurationShort(durMs);
-            let tLabel = ev.type === 'legit' ? (ev.title || 'Legitimate Pause') : typeLabels[ev.type];
+            // 1. Header (Date + Totals)
+            let html = `
+                <div class="timeline-day-header">
+                    <div class="timeline-date">${day.label}</div>
+                    <div class="timeline-totals">
+                        <span><b class="dot-work">•</b> ${formatDurationShort(day.tWork)}</span>
+                        <span><b class="dot-waste">•</b> ${formatDurationShort(day.tWaste)}</span>
+                        <span><b class="dot-legit">•</b> ${formatDurationShort(day.tLegit)}</span>
+                    </div>
+                </div>
+            `;
             
-            block.title = `${tLabel}\n${durationStr}\n${timeRangeStr}`;
+            // 2. Visual 24h Tracker
+            html += `<div class="timeline-track-container">`;
+            day.events.forEach(ev => {
+                let leftPerc = ((ev.start - startOfDayMs) / msInDay) * 100;
+                let widthPerc = ((ev.end - ev.start) / msInDay) * 100;
+                
+                // Keep visually inside the box
+                if (leftPerc < 0) { widthPerc += leftPerc; leftPerc = 0; }
+                if (leftPerc + widthPerc > 100) { widthPerc = 100 - leftPerc; }
+                if (widthPerc < 0.2) widthPerc = 0.2; // Show at least a sliver
+                
+                let hoverText = `${ev.title} \nDuration: ${formatDurationShort(ev.end - ev.start)} \nTime: ${formatTimeRange(ev.start, ev.end)}`;
+                
+                html += `<div class="timeline-track-segment ${ev.type}" style="left: ${leftPerc}%; width: ${widthPerc}%;" title="${hoverText}"></div>`;
+            });
+            html += `</div>`;
             
-            if (heightPx > 20) {
-                block.innerHTML = `<div style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:95%;">${escapeHtml(tLabel)}</div>
-                                   <div style="font-size:0.75rem; white-space:nowrap; opacity:0.9;">${durationStr} | ${timeRangeStr}</div>`;
-            } else if (heightPx > 10) {
-                block.innerHTML = `<div style="font-size:0.7rem; white-space:nowrap;">${escapeHtml(tLabel)}</div>`;
-            }
+            // 3. Markings for track
+            html += `
+                <div class="track-markers">
+                    <span class="track-marker" style="left: 0%;">00:00</span>
+                    <span class="track-marker" style="left: 25%;">06:00</span>
+                    <span class="track-marker" style="left: 50%;">12:00</span>
+                    <span class="track-marker" style="left: 75%;">18:00</span>
+                    <span class="track-marker" style="left: 100%;">23:59</span>
+                </div>
+            `;
             
-            container.appendChild(block);
+            // 4. Chronological Feed Breakdown
+            html += `<div class="timeline-feed">`;
+            day.events.forEach(ev => {
+                html += `
+                    <div class="timeline-event-row">
+                        <span class="event-time">${formatTimeRange(ev.start, ev.end)}</span>
+                        <span class="event-badge ${ev.type}">${typeLabels[ev.type]}</span>
+                        <span class="event-title">${escapeHtml(ev.title)}</span>
+                        <span class="event-duration">${formatDurationShort(ev.end - ev.start)}</span>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+            
+            card.innerHTML = html;
+            container.appendChild(card);
         });
     }
-
     // Timeline Routing
     document.getElementById('open-timeline-btn').addEventListener('click', () => renderTimeline('all'));
     document.getElementById('timeline-back-btn').addEventListener('click', () => {
