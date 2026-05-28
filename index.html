@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Timer</title>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --fg: #e0e0e0;
+            --card-bg: #1c1c1c;
+            --accent: #ffb74d;
+            --danger: #e57373;
+            --success: #66bb6a;
+            --info: #90caf9;
+            --muted-red: #7a4a4a;
+            --muted-green: #4a6b4a;
+            --pill-bg: #333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg);
+            color: var(--fg);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 700px;
+        }
+
+        h1, h2 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            color: #888;
+        }
+
+        /* Setup / Journal */
+        #setup-screen {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+            width: 100%;
+        }
+
+        .setup-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 2rem;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        #setup-screen input {
+            background: #2a2a2a;
+            border: 1px solid #333;
+            color: var(--fg);
+            padding: 0.9rem 1rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            width: 100%;
+            max-width: 380px;
+        }
+
+        #setup-screen input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .pill-btn {
+            background: var(--pill-bg);
+            color: #fff;
+            border: none;
+            padding: 0.9rem 2.5rem;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.1s ease, opacity 0.2s;
+            min-width: 180px;
+        }
+
+        .pill-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .pill-btn.accent { background: var(--accent); color: #1a1a1a; }
+
+        /* Timer */
+        #timer-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            width: 100%;
+        }
+
+        #session-info {
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        #session-info .title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            word-break: break-word;
+            color: var(--fg);
+        }
+
+        #session-info .expected {
+            font-size: 0.9rem;
+            color: #aaa;
+        }
+
+        .clock-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 2.5rem 1.5rem;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+        }
+
+        .clock-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 1rem;
+            color: #888;
+        }
+
+        .clock-display {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            font-size: 5rem;
+            line-height: 1;
+            color: var(--accent);
+        }
+
+        #wasted-clock .clock-display {
+            font-size: 3.2rem;
+            color: var(--danger);
+            opacity: 0.9;
+        }
+
+        .controls {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 0.8rem 2rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            font-weight: 500;
+            min-width: 120px;
+        }
+
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+        .btn-play {
+            background: var(--muted-green);
+            color: #fff;
+        }
+
+        .btn-stop {
+            background: var(--muted-red);
+            color: #fff;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.9);
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal {
+            background: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: 16px;
+            text-align: center;
+            max-width: 380px;
+            width: 90%;
+        }
+
+        .modal h3 {
+            margin-bottom: 2rem;
+            font-weight: 400;
+            font-size: 1.2rem;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        /* Journal */
+        #journal-section {
+            width: 100%;
+            margin-top: 2rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 0.75rem 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        th {
+            color: #888;
+            font-weight: 500;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        td {
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 0.85rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-completed {
+            background: rgba(102, 187, 106, 0.2);
+            color: var(--success);
+        }
+
+        .status-abandoned {
+            background: rgba(229, 115, 115, 0.2);
+            color: var(--danger);
+        }
+
+        .journal-actions {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .hidden { display: none !important; }
+
+        @media (max-width: 600px) {
+            .clock-display { font-size: 3.5rem; }
+            #wasted-clock .clock-display { font-size: 2.2rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Focus Timer</h1>
+
+    <!-- Setup -->
+    <div id="setup-screen">
+        <div class="setup-card">
+            <input type="text" id="task-title" placeholder="Task Title / Goal">
+            <input type="text" id="expected-time" placeholder="Expected Time (HH:MM)">
+            <button class="pill-btn accent" id="start-btn">Start Session</button>
+        </div>
+
+        <!-- Journal -->
+        <div id="journal-section">
+            <h2>Journal</h2>
+            <div class="journal-actions">
+                <button class="pill-btn" style="background: var(--info); color: #1a1a1a; font-weight: 600;" id="export-btn">Export JSON</button>
+                <input type="file" id="import-input" accept=".json" style="display:none">
+                <button class="pill-btn" id="import-btn">Import JSON</button>
+                <button class="pill-btn" style="background: var(--danger); color: #fff;" id="reset-journal-btn">Reset Journal</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Date</th>
+                        <th>Work Time</th>
+                        <th>Wasted Time</th>
+                        <th>Expected</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="journal-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Timer -->
+    <div id="timer-screen">
+        <div id="session-info">
+            <div class="title" id="display-title"></div>
+            <div class="expected">Expected: <span id="display-expected"></span></div>
+        </div>
+
+        <div class="clock-card" id="work-clock">
+            <div class="clock-label">Work Time</div>
+            <div class="clock-display" id="work-display">00:00:00</div>
+            <div class="controls">
+                <button class="btn btn-play" id="play-pause-btn">Start</button>
+                <button class="btn btn-stop" id="stop-btn">Stop</button>
+            </div>
+        </div>
+
+        <div class="clock-card" id="wasted-clock">
+            <div class="clock-label">Wasted Time</div>
+            <div class="clock-display" id="wasted-display">00:00</div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="status-modal">
+    <div class="modal">
+        <h3>How did this session end?</h3>
+        <div class="modal-buttons">
+            <button class="btn" id="abandoned-btn" style="background: var(--muted-red); color: #fff;">Abandoned</button>
+            <button class="btn" id="completed-btn" style="background: var(--muted-green); color: #fff;">Completed</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // State
+    let workSeconds = 0;
+    let wastedSeconds = 0;
+    let isWorkRunning = false;
+    let workInterval = null;
+    let wastedInterval = null;
+    let currentSession = null;
+
+    // Elements
+    const setupScreen = document.getElementById('setup-screen');
+    const timerScreen = document.getElementById('timer-screen');
+    const taskTitleInput = document.getElementById('task-title');
+    const expectedTimeInput = document.getElementById('expected-time');
+    const startBtn = document.getElementById('start-btn');
+    const displayTitle = document.getElementById('display-title');
+    const displayExpected = document.getElementById('display-expected');
+    const workDisplay = document.getElementById('work-display');
+    const wastedDisplay = document.getElementById('wasted-display');
+    const playPauseBtn = document.getElementById('play-pause-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const statusModal = document.getElementById('status-modal');
+    const abandonedBtn = document.getElementById('abandoned-btn');
+    const completedBtn = document.getElementById('completed-btn');
+    const journalBody = document.getElementById('journal-body');
+    const exportBtn = document.getElementById('export-btn');
+    const importBtn = document.getElementById('import-btn');
+    const importInput = document.getElementById('import-input');
+    const resetJournalBtn = document.getElementById('reset-journal-btn');
+
+    // Helpers
+    function formatWorkTime(totalSeconds) {
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function formatWastedTime(totalSeconds) {
+        const m = Math.floor(totalSeconds / 60);
+        const s = totalSeconds % 60;
+        return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function updateDisplays() {
+        workDisplay.textContent = formatWorkTime(workSeconds);
+        wastedDisplay.textContent = formatWastedTime(wastedSeconds);
+    }
+
+    function getJournal() {
+        try {
+            const data = localStorage.getItem('focusTimerJournal');
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveJournal(journal) {
+        localStorage.setItem('focusTimerJournal', JSON.stringify(journal));
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function renderJournal() {
+        const journal = getJournal();
+        journalBody.innerHTML = '';
+        journal.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+        journal.forEach(entry => {
+            const tr = document.createElement('tr');
+            const dateStr = new Date(entry.startTime).toLocaleString();
+            const statusClass = entry.status === 'completed' ? 'status-completed' : 'status-abandoned';
+            tr.innerHTML = `
+                <td>${escapeHtml(entry.title)}</td>
+                <td>${dateStr}</td>
+                <td>${formatWorkTime(entry.workSeconds)}</td>
+                <td>${formatWastedTime(entry.wastedSeconds)}</td>
+                <td>${escapeHtml(entry.expectedTime)}</td>
+                <td><span class="status-badge ${statusClass}">${entry.status}</span></td>
+            `;
+            journalBody.appendChild(tr);
+        });
+    }
+
+    // Timer Logic
+    function startWork() {
+        if (isWorkRunning) return;
+        isWorkRunning = true;
+        playPauseBtn.textContent = 'Pause';
+        clearInterval(wastedInterval);
+        workInterval = setInterval(() => {
+            workSeconds++;
+            updateDisplays();
+        }, 1000);
+    }
+
+    function pauseWork() {
+        if (!isWorkRunning) return;
+        isWorkRunning = false;
+        clearInterval(workInterval);
+        playPauseBtn.textContent = 'Resume';
+        clearInterval(wastedInterval);
+        wastedInterval = setInterval(() => {
+            wastedSeconds++;
+            updateDisplays();
+        }, 1000);
+    }
+
+    function togglePlayPause() {
+        if (isWorkRunning) {
+            pauseWork();
+        } else {
+            startWork();
+        }
+    }
+
+    function stopSession() {
+        clearInterval(workInterval);
+        clearInterval(wastedInterval);
+        isWorkRunning = false;
+        playPauseBtn.disabled = true;
+        stopBtn.disabled = true;
+        playPauseBtn.style.opacity = 0.5;
+        stopBtn.style.opacity = 0.5;
+        statusModal.style.display = 'flex';
+    }
+
+    function resetAll() {
+        clearInterval(workInterval);
+        clearInterval(wastedInterval);
+        workSeconds = 0;
+        wastedSeconds = 0;
+        isWorkRunning = false;
+        workInterval = null;
+        wastedInterval = null;
+        currentSession = null;
+        updateDisplays();
+        playPauseBtn.textContent = 'Start';
+        playPauseBtn.disabled = false;
+        stopBtn.disabled = false;
+        playPauseBtn.style.opacity = 1;
+        stopBtn.style.opacity = 1;
+        timerScreen.style.display = 'none';
+        setupScreen.style.display = 'flex';
+        taskTitleInput.value = '';
+        expectedTimeInput.value = '';
+    }
+
+    // Event Listeners
+    startBtn.addEventListener('click', () => {
+        const title = taskTitleInput.value.trim();
+        const expected = expectedTimeInput.value.trim();
+        if (!title || !expected) {
+            alert('Please enter both a title and an expected time.');
+            return;
+        }
+        currentSession = {
+            title,
+            expectedTime: expected,
+            startTime: new Date().toISOString()
+        };
+        displayTitle.textContent = title;
+        displayExpected.textContent = expected;
+        setupScreen.style.display = 'none';
+        timerScreen.style.display = 'flex';
+        playPauseBtn.textContent = 'Start';
+    });
+
+    playPauseBtn.addEventListener('click', togglePlayPause);
+    stopBtn.addEventListener('click', stopSession);
+
+    function finishSession(status) {
+        if (!currentSession) return;
+        const entry = {
+            ...currentSession,
+            workSeconds,
+            wastedSeconds,
+            status
+        };
+        const journal = getJournal();
+        journal.push(entry);
+        saveJournal(journal);
+        renderJournal();
+        statusModal.style.display = 'none';
+        // Automatically return to setup screen
+        resetAll();
+    }
+
+    abandonedBtn.addEventListener('click', () => finishSession('abandoned'));
+    completedBtn.addEventListener('click', () => finishSession('completed'));
+
+    // Export / Import / Reset
+    exportBtn.addEventListener('click', () => {
+        const journal = getJournal();
+        const blob = new Blob([JSON.stringify(journal, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `focus-timer-journal-${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    importBtn.addEventListener('click', () => importInput.click());
+
+    importInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const imported = JSON.parse(event.target.result);
+                if (!Array.isArray(imported)) throw new Error('Invalid format');
+                const journal = getJournal();
+                const existingStarts = new Set(journal.map(j => j.startTime));
+                let added = 0;
+                imported.forEach(item => {
+                    if (item && item.startTime && !existingStarts.has(item.startTime)) {
+                        journal.push(item);
+                        added++;
+                    }
+                });
+                saveJournal(journal);
+                renderJournal();
+                alert(`Imported ${added} new session(s).`);
+            } catch (err) {
+                alert('Failed to import JSON: ' + err.message);
+            }
+            importInput.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    resetJournalBtn.addEventListener('click', () => {
+        if (!confirm('Are you sure you want to permanently delete all journal entries?')) return;
+        localStorage.removeItem('focusTimerJournal');
+        renderJournal();
+    });
+
+    // Init
+    renderJournal();
+</script>
+
+</body>
+</html>
