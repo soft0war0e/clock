@@ -561,6 +561,7 @@
 
     let isWorkRunning = false;
     let isLegitPaused = false;
+    let currentMode = 'standby'; // 'standby', 'work', 'waste', 'legit'
     
     let workInterval = null;
     let wastedInterval = null;
@@ -687,6 +688,99 @@
         document.getElementById('details-modal').style.display = 'flex';
     };
 
+// Persistence Logic
+    function persistState() {
+        if (!currentSession) {
+            localStorage.removeItem('focusTimerActiveState');
+            return;
+        }
+        const state = {
+            session: currentSession,
+            mode: currentMode,
+            workAccumulated,
+            wastedAccumulated,
+            legitAccumulated,
+            currentStartTime: 
+                currentMode === 'work' ? workStartTime : 
+                currentMode === 'waste' ? wastedStartTime : 
+                currentMode === 'legit' ? legitStartTime : 0,
+            legitTitle: document.getElementById('legit-display-title').textContent
+        };
+        localStorage.setItem('focusTimerActiveState', JSON.stringify(state));
+    }
+
+    function restoreState() {
+        const saved = localStorage.getItem('focusTimerActiveState');
+        if (!saved) return false;
+        
+        try {
+            const state = JSON.parse(saved);
+            if (!state || !state.session) return false;
+            
+            currentSession = state.session;
+            currentMode = state.mode;
+            workAccumulated = state.workAccumulated || 0;
+            wastedAccumulated = state.wastedAccumulated || 0;
+            legitAccumulated = state.legitAccumulated || 0;
+            
+            displayTitle.textContent = currentSession.title;
+            displayExpected.textContent = currentSession.expectedTime;
+            setupScreen.style.display = 'none';
+            timerScreen.style.display = 'flex';
+            
+            if (currentMode === 'work') {
+                workStartTime = state.currentStartTime;
+                isWorkRunning = true;
+                isLegitPaused = false;
+                playPauseBtn.textContent = 'Pause';
+                legitPauseBtn.disabled = false;
+                workInterval = setInterval(() => {
+                    workSeconds = workAccumulated + Math.floor((Date.now() - workStartTime) / 1000);
+                    updateDisplays();
+                }, 1000);
+            } else if (currentMode === 'waste') {
+                wastedStartTime = state.currentStartTime;
+                isWorkRunning = false;
+                isLegitPaused = false;
+                playPauseBtn.textContent = 'Resume';
+                legitPauseBtn.disabled = false;
+                wastedInterval = setInterval(() => {
+                    wastedSeconds = wastedAccumulated + Math.floor((Date.now() - wastedStartTime) / 1000);
+                    updateDisplays();
+                }, 1000);
+            } else if (currentMode === 'legit') {
+                legitStartTime = state.currentStartTime;
+                isWorkRunning = false;
+                isLegitPaused = true;
+                playPauseBtn.textContent = 'Resume';
+                legitPauseBtn.disabled = true;
+                document.getElementById('legit-display-title').textContent = state.legitTitle || "Legitimate Pause";
+                document.getElementById('legit-clock').style.display = 'block';
+                legitInterval = setInterval(() => {
+                    legitSeconds = legitAccumulated + Math.floor((Date.now() - legitStartTime) / 1000);
+                    updateDisplays();
+                }, 1000);
+            } else {
+                playPauseBtn.textContent = 'Start';
+            }
+            
+            if (currentMode === 'work') workSeconds = workAccumulated + Math.floor((Date.now() - workStartTime) / 1000);
+            else workSeconds = workAccumulated;
+            
+            if (currentMode === 'waste') wastedSeconds = wastedAccumulated + Math.floor((Date.now() - wastedStartTime) / 1000);
+            else wastedSeconds = wastedAccumulated;
+            
+            if (currentMode === 'legit') legitSeconds = legitAccumulated + Math.floor((Date.now() - legitStartTime) / 1000);
+            else legitSeconds = legitAccumulated;
+            
+            updateDisplays();
+            return true;
+        } catch (e) {
+            localStorage.removeItem('focusTimerActiveState');
+            return false;
+        }
+    }
+
     // Tracking Event Lifecycle
     function closeLastEvent() {
         if (currentSession && currentSession.events && currentSession.events.length > 0) {
@@ -695,23 +789,25 @@
         }
     }
 
-    // Timer Logic Hooks (Throttling-Proof)
+    // Timer Logic Hooks (Persistent)
     function startWork() {
         if (isWorkRunning) return;
         closeLastEvent();
         
         isWorkRunning = true;
         isLegitPaused = false;
+        currentMode = 'work';
         
         playPauseBtn.textContent = 'Pause';
         legitPauseBtn.disabled = false;
         
-        // Stop and accumulate other timers
         if (wastedInterval) { clearInterval(wastedInterval); wastedInterval = null; wastedAccumulated = wastedSeconds; }
         if (legitInterval) { clearInterval(legitInterval); legitInterval = null; legitAccumulated = legitSeconds; }
         
         currentSession.events.push({ type: 'work', start: Date.now() });
         workStartTime = Date.now();
+        
+        persistState();
         
         workInterval = setInterval(() => {
             workSeconds = workAccumulated + Math.floor((Date.now() - workStartTime) / 1000);
@@ -727,8 +823,8 @@
         
         isWorkRunning = false;
         isLegitPaused = false;
+        currentMode = 'waste';
         
-        // Stop and accumulate work/legit
         if (workInterval) { clearInterval(workInterval); workInterval = null; workAccumulated = workSeconds; }
         if (legitInterval) { clearInterval(legitInterval); legitInterval = null; legitAccumulated = legitSeconds; }
         
@@ -737,6 +833,8 @@
         
         currentSession.events.push({ type: 'waste', start: Date.now() });
         wastedStartTime = Date.now();
+        
+        persistState();
         
         wastedInterval = setInterval(() => {
             wastedSeconds = wastedAccumulated + Math.floor((Date.now() - wastedStartTime) / 1000);
@@ -756,8 +854,8 @@
         
         isWorkRunning = false;
         isLegitPaused = true;
+        currentMode = 'legit';
         
-        // Stop and accumulate work/wasted
         if (workInterval) { clearInterval(workInterval); workInterval = null; workAccumulated = workSeconds; }
         if (wastedInterval) { clearInterval(wastedInterval); wastedInterval = null; wastedAccumulated = wastedSeconds; }
         
@@ -767,13 +865,15 @@
         currentSession.events.push({ type: 'legit', start: Date.now(), title: title });
         legitStartTime = Date.now();
         
+        document.getElementById('legit-display-title').textContent = "Paused: " + title;
+        document.getElementById('legit-clock').style.display = 'block';
+        
+        persistState();
+        
         legitInterval = setInterval(() => {
             legitSeconds = legitAccumulated + Math.floor((Date.now() - legitStartTime) / 1000);
             updateDisplays();
         }, 1000);
-        
-        document.getElementById('legit-display-title').textContent = "Paused: " + title;
-        document.getElementById('legit-clock').style.display = 'block';
     }
 
     function stopSession() {
@@ -794,6 +894,8 @@
         legitPauseBtn.style.opacity = 0.5;
         stopBtn.style.opacity = 0.5;
         
+        persistState();
+        
         statusModal.style.display = 'flex';
     }
 
@@ -812,7 +914,10 @@
         
         isWorkRunning = false;
         isLegitPaused = false;
+        currentMode = 'standby';
         currentSession = null;
+        
+        persistState(); // Removes it from memory because currentSession is null
         
         updateDisplays();
         
@@ -832,9 +937,8 @@
         taskTitleInput.value = '';
         expectedTimeInput.value = '';
     }
-
     // Event Listeners (Setup & Run)
-    startBtn.addEventListener('click', () => {
+startBtn.addEventListener('click', () => {
         const title = taskTitleInput.value.trim();
         const expected = expectedTimeInput.value.trim();
         if (!title || !expected) {
@@ -847,6 +951,9 @@
             startTime: new Date().toISOString(),
             events: []
         };
+        currentMode = 'standby';
+        persistState();
+        
         displayTitle.textContent = title;
         displayExpected.textContent = expected;
         
@@ -854,7 +961,6 @@
         timerScreen.style.display = 'flex';
         playPauseBtn.textContent = 'Start';
     });
-
     playPauseBtn.addEventListener('click', togglePlayPause);
     stopBtn.addEventListener('click', stopSession);
 
@@ -1175,6 +1281,7 @@ function renderTimeline(filter = 'all') {
 
     // Boot
     renderJournal();
+    restoreState();
 </script>
 
 </body>
